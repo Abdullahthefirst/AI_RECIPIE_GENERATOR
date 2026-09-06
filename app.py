@@ -1,10 +1,9 @@
-import os
 import streamlit as st
 from google import genai
 
 
 # =========================================================
-# PAGE SETTINGS
+# PAGE CONFIG
 # =========================================================
 
 st.set_page_config(
@@ -21,24 +20,18 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-        .block-container {
-            max-width: 850px;
-            padding-top: 2rem;
-            padding-bottom: 3rem;
-        }
+    .block-container {
+        max-width: 850px;
+        padding-top: 2rem;
+        padding-bottom: 3rem;
+    }
 
-        div.stButton > button {
-            width: 100%;
-            border-radius: 10px;
-            font-weight: 600;
-            padding: 0.7rem;
-        }
-
-        .app-description {
-            font-size: 1.05rem;
-            color: #666;
-            margin-bottom: 20px;
-        }
+    div.stButton > button {
+        width: 100%;
+        border-radius: 10px;
+        font-weight: 600;
+        padding: 0.7rem;
+    }
     </style>
     """,
     unsafe_allow_html=True
@@ -46,228 +39,144 @@ st.markdown(
 
 
 # =========================================================
-# GEMINI CLIENT
+# SIDEBAR - GEMINI API KEY
 # =========================================================
 
-def get_gemini_client():
-    """
-    Get the Gemini API key.
+with st.sidebar:
 
-    On Streamlit Cloud:
-        The key comes from Streamlit Secrets.
+    st.header("⚙️ Settings")
 
-    Locally:
-        The key can come from the GEMINI_API_KEY
-        environment variable.
-    """
+    st.write(
+        "Enter your Gemini API key to generate recipes."
+    )
 
-    api_key = None
+    gemini_api_key = st.text_input(
+        "Gemini API Key",
+        type="password",
+        placeholder="Paste your Gemini API key here"
+    )
 
-    # First try Streamlit Secrets
-    try:
-        api_key = st.secrets["GEMINI_API_KEY"]
-    except Exception:
-        pass
+    st.caption(
+        "🔒 Your key is used to connect to Gemini and is not "
+        "saved by this app."
+    )
 
-    # If not found, try environment variable
-    if not api_key:
-        api_key = os.environ.get("GEMINI_API_KEY")
+    st.divider()
+
+    st.markdown("### About")
+
+    st.write(
+        "AI Food Recipe Planner creates practical recipes based "
+        "on your available time, cooking experience, and budget."
+    )
+
+
+# =========================================================
+# CREATE GEMINI CLIENT
+# =========================================================
+
+def get_gemini_client(api_key):
 
     if not api_key:
         raise ValueError(
-            "Gemini API key was not found. "
-            "Add GEMINI_API_KEY to Streamlit Secrets."
+            "Please enter your Gemini API key in the sidebar."
         )
 
     return genai.Client(api_key=api_key)
 
 
 # =========================================================
-# CREATE GEMINI PROMPT
+# CREATE RECIPE PROMPT
 # =========================================================
 
 def build_recipe_prompt(food_name, expertise, max_time):
-    """
-    Creates a strong prompt so Gemini follows:
-    - requested food
-    - expertise level
-    - maximum cooking time
-    - budget requirements
-    """
 
     return f"""
 You are an expert home-cooking recipe planner.
 
-Create ONE practical recipe based on the user's request.
+Create ONE practical recipe for the user.
 
-USER DETAILS
+USER REQUEST
 
-Recipe requested:
+Food / Recipe:
 {food_name}
 
 Cooking expertise:
 {expertise}
 
-Maximum available TOTAL time:
+Maximum total available time:
 {max_time} minutes
 
 
-==============================
-STRICT REQUIREMENTS
-==============================
+IMPORTANT RULES
 
-1. RECIPE ACCURACY
+1. The recipe must genuinely be for "{food_name}".
 
-The recipe must genuinely be for:
+2. Adjust the instructions for a {expertise} cook.
 
-"{food_name}"
+3. Preparation time + cooking time should stay within
+   {max_time} minutes whenever realistically possible.
 
-Do not change the requested dish into something unrelated.
+4. Never give an unrealistic cooking time simply to fit
+   the user's limit.
 
-You may make practical adjustments when necessary, but the final
-recipe must still clearly represent the requested food.
+5. If the traditional recipe cannot realistically be completed
+   within {max_time} minutes:
+   - briefly explain this
+   - provide the fastest practical adaptation
 
+6. Prefer affordable and commonly available ingredients.
 
-2. MAXIMUM TIME
+7. Avoid unnecessary:
+   - luxury ingredients
+   - premium ingredients
+   - imported ingredients
+   - difficult-to-find specialty ingredients
 
-The user only has {max_time} minutes.
+8. When an expensive ingredient is normally required,
+   suggest a cheaper substitute when possible.
 
-Preparation time + cooking time should stay within
-{max_time} minutes whenever realistically possible.
+9. Give exact practical quantities for every important ingredient.
 
-Calculate the times carefully.
+10. Do not use important ingredients in the instructions
+    unless they are included in the ingredient list.
 
-For example:
+11. Give clear numbered cooking instructions.
 
-Preparation: 10 minutes
-Cooking: 25 minutes
-Total: 35 minutes
+12. Include useful heat levels, cooking times, and visual
+    signs of doneness when appropriate.
 
-The numbers must be mathematically consistent.
-
-Never claim an unrealistic cooking time simply to satisfy
-the user's limit.
-
-If the traditional version genuinely cannot be completed within
-{max_time} minutes:
-
-- clearly mention that
-- create the fastest realistic version
-- explain briefly what was simplified
+13. Keep food-safety instructions sensible.
 
 
-3. EXPERIENCE LEVEL
+EXPERTISE GUIDANCE
 
-The user selected:
+If the user is Beginner:
+- use simple techniques
+- explain steps clearly
+- avoid unnecessarily complicated equipment
+- explain unfamiliar terms
+- give useful visual clues
 
-{expertise}
+If the user is Intermediate:
+- assume basic cooking knowledge
+- moderate techniques are acceptable
+- keep instructions clear
 
-Adjust the instructions accordingly.
-
-BEGINNER:
-
-- Use simple techniques
-- Explain steps clearly
-- Avoid unnecessary complicated equipment
-- Explain unfamiliar cooking terms
-- Include useful visual clues such as
-  "cook until lightly golden"
-
-INTERMEDIATE:
-
-- Assume basic cooking knowledge
-- Moderate techniques are acceptable
-- Keep the instructions clear and practical
-
-ADVANCED:
-
-- More sophisticated techniques are acceptable
-- More detailed cooking techniques may be included
-- Still keep the recipe practical
+If the user is Advanced:
+- advanced techniques may be used
+- provide more detailed cooking guidance
+- still keep the recipe practical
 
 
-4. BUDGET
-
-The recipe should be affordable.
-
-Prefer:
-
-- common supermarket ingredients
-- inexpensive vegetables
-- normal pantry ingredients
-- commonly available spices
-- affordable proteins
-
-Avoid unnecessarily using:
-
-- luxury ingredients
-- premium imported products
-- very expensive ingredients
-- difficult-to-find specialty ingredients
-
-If the dish normally uses an expensive ingredient:
-
-Suggest a cheaper substitute whenever possible.
-
-Do not ruin the identity of the dish just to make it cheaper.
-
-
-5. INGREDIENTS
-
-Every ingredient must include a clear quantity.
-
-Examples:
-
-- 2 cups rice
-- 500 g chicken
-- 1 medium onion
-- 2 tablespoons cooking oil
-- 1 teaspoon salt
-
-Clearly mark optional ingredients.
-
-Do not use important ingredients in the instructions that
-were not included in the ingredient list.
-
-
-6. INSTRUCTIONS
-
-Provide numbered step-by-step instructions.
-
-The instructions must be:
-
-- practical
-- clear
-- easy to follow
-- appropriate for a {expertise} cook
-
-Mention useful information such as:
-
-- approximate cooking time for important steps
-- heat level
-- visual signs of doneness
-- when ingredients should be added
-
-
-7. FOOD SAFETY
-
-Include safe and sensible cooking instructions.
-
-For meat, poultry, seafood, or eggs, ensure the recipe does not
-encourage unsafe cooking practices.
-
-
-==============================
 OUTPUT FORMAT
-==============================
 
-Write the answer using clean Markdown in exactly this general
-structure:
+Return the recipe in clean Markdown using this structure:
 
 
 # [Recipe Name]
 
-A short 1-2 sentence description of the dish.
+A short description of the dish.
 
 
 ## ⏱️ Time
@@ -284,7 +193,7 @@ A short 1-2 sentence description of the dish.
 
 ## 🍽️ Servings
 
-Give a reasonable number of servings.
+Number of servings.
 
 
 ## 🛒 Ingredients
@@ -296,9 +205,10 @@ Give a reasonable number of servings.
 
 ## 💰 Cheaper Substitutions
 
-List useful cheaper alternatives for ingredients.
+Suggest useful cheaper alternatives.
 
-If the recipe already uses inexpensive ingredients, say so.
+If no substitutions are necessary, mention that the ingredients
+are already budget-friendly.
 
 
 ## 🍳 Instructions
@@ -306,37 +216,33 @@ If the recipe already uses inexpensive ingredients, say so.
 1. First step
 2. Second step
 3. Third step
-4. Continue until finished
+4. Continue until complete
 
 
 ## 💡 Budget-Saving Tips
 
-Give 3 to 5 useful budget-saving tips specifically related
-to this recipe.
+Provide 3 to 5 useful budget-saving tips specifically for
+this recipe.
 
 
 ## ✅ Quick Success Tips
 
-Give 2 to 4 short tips that are especially helpful for a
-{expertise} cook.
+Provide 2 to 4 useful tips for a {expertise} cook.
 
 
-==============================
 FINAL CHECK
-==============================
 
-Before answering, silently verify:
+Before responding, verify that:
 
-- The recipe actually matches "{food_name}"
-- Every important ingredient has a quantity
-- Prep time + cooking time = total time
-- Total time stays within {max_time} minutes whenever realistic
-- Ingredients are reasonably affordable
-- Expensive ingredients have cheaper substitutes when possible
-- Instructions match the {expertise} expertise level
-- Instructions are practical and easy to follow
+- the recipe matches "{food_name}"
+- ingredient quantities are included
+- prep time + cooking time = total time
+- the time estimate is realistic
+- the recipe stays within {max_time} minutes when possible
+- ingredients are reasonably affordable
+- instructions match the {expertise} level
 
-Return ONLY the completed recipe.
+Return only the completed recipe.
 """
 
 
@@ -344,59 +250,27 @@ Return ONLY the completed recipe.
 # GENERATE RECIPE
 # =========================================================
 
-def generate_recipe(food_name, expertise, max_time):
-    """
-    Send the user's request to Gemini and return
-    the generated recipe.
-    """
+def generate_recipe(api_key, food_name, expertise, max_time):
 
-    client = get_gemini_client()
+    client = get_gemini_client(api_key)
 
     prompt = build_recipe_prompt(
-        food_name=food_name,
-        expertise=expertise,
-        max_time=max_time
+        food_name,
+        expertise,
+        max_time
     )
 
-    system_instruction = """
-You are AI Food Recipe Planner, an expert home-cooking assistant.
-
-Your recipes should prioritize:
-
-1. Accuracy to the requested dish
-2. The user's available cooking time
-3. The user's cooking experience
-4. Affordable ingredients
-5. Easy-to-find ingredients
-6. Clear quantities
-7. Practical instructions
-8. Sensible food safety
-
-Do not pretend an impossible cooking time is realistic.
-
-If a traditional dish cannot realistically be prepared within
-the requested time, make the fastest practical adaptation and
-briefly explain the adjustment.
-
-Write the final recipe in clean Markdown that looks good inside
-a Streamlit application.
-"""
-
-    # Current Gemini Interactions API
-    interaction = client.interactions.create(
-        model="gemini-3.7-flash",
-        system_instruction=system_instruction,
-        input=prompt,
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt
     )
 
-    recipe = interaction.output_text
-
-    if not recipe or not recipe.strip():
+    if not response.text:
         raise RuntimeError(
             "Gemini returned an empty response. Please try again."
         )
 
-    return recipe
+    return response.text
 
 
 # =========================================================
@@ -405,15 +279,9 @@ a Streamlit application.
 
 st.title("🍳 AI Food Recipe Planner")
 
-st.markdown(
-    """
-    <div class="app-description">
-        Tell the AI what you want to cook, your cooking experience,
-        and how much time you have. It will create a practical,
-        budget-friendly recipe for you.
-    </div>
-    """,
-    unsafe_allow_html=True
+st.write(
+    "Create practical, budget-friendly recipes based on your "
+    "cooking experience and available time."
 )
 
 st.divider()
@@ -431,7 +299,7 @@ food_name = st.text_input(
 
 expertise = st.selectbox(
     "👨‍🍳 Cooking Expertise",
-    options=[
+    [
         "Beginner",
         "Intermediate",
         "Advanced"
@@ -444,8 +312,7 @@ max_time = st.slider(
     min_value=10,
     max_value=180,
     value=45,
-    step=5,
-    format="%d minutes"
+    step=5
 )
 
 
@@ -467,26 +334,25 @@ generate_button = st.button(
 
 
 # =========================================================
-# GENERATE AND DISPLAY RECIPE
+# GENERATE RECIPE
 # =========================================================
 
 if generate_button:
 
-    # Remove unnecessary spaces
-    cleaned_food_name = food_name.strip()
+    food_name = food_name.strip()
 
-    # Check for missing food name
-    if not cleaned_food_name:
+    # Check API key
+    if not gemini_api_key:
 
-        st.warning(
-            "🍽️ Please enter the name of the food or recipe "
-            "you would like to make."
+        st.error(
+            "🔑 Please enter your Gemini API key in the sidebar."
         )
 
-    elif len(cleaned_food_name) < 2:
+    # Check recipe name
+    elif not food_name:
 
         st.warning(
-            "Please enter a valid recipe or food name."
+            "🍽️ Please enter the food or recipe you want to make."
         )
 
     else:
@@ -494,48 +360,37 @@ if generate_button:
         try:
 
             with st.spinner(
-                f"👨‍🍳 Creating your {cleaned_food_name} recipe..."
+                f"👨‍🍳 Creating your {food_name} recipe..."
             ):
 
                 recipe = generate_recipe(
-                    food_name=cleaned_food_name,
-                    expertise=expertise,
-                    max_time=max_time
+                    gemini_api_key,
+                    food_name,
+                    expertise,
+                    max_time
                 )
 
             st.success("✅ Your recipe is ready!")
 
             st.divider()
 
-            # Display Gemini's Markdown response
             st.markdown(recipe)
 
             st.divider()
 
             st.caption(
-                "🤖 This recipe was generated by AI. "
-                "Always check ingredient allergies and use safe "
-                "food-handling and cooking practices."
+                "🤖 AI-generated recipe. Check allergies and "
+                "follow safe food-handling practices."
             )
-
-
-        except ValueError as error:
-
-            st.error(
-                f"🔑 Configuration Error: {error}"
-            )
-
 
         except Exception as error:
 
             st.error(
-                "😕 We couldn't generate your recipe right now. "
-                "Please try again."
+                "😕 The recipe could not be generated. "
+                "Check your Gemini API key and try again."
             )
 
-            # Technical information can be useful when developing
             with st.expander("🔧 Technical error details"):
-
                 st.code(str(error))
 
 
