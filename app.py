@@ -548,4 +548,4 @@ st.divider()
 st.caption(
     "🍳 AI Food Recipe Planner • Powered by Google Gemini"
 )
-```
+
